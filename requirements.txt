@@ -1,0 +1,6 @@
+aiogram~=2.25
+environs~=8.0.0
+marshmallow<4  # environs 8.0.0 is incompatible with marshmallow 4.x (it removed __version__)
+yfinance>=0.2.40
+pandas>=2.0
+anthropic>=1.6

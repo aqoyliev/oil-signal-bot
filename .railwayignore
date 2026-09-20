@@ -1,0 +1,13 @@
+# Never upload secrets or the local database — Railway uses its own
+# environment variables and a mounted volume for data/.
+.env
+data/bot.db
+data/*.db
+
+# Local clutter
+__pycache__/
+*.pyc
+.venv/
+venv/
+.idea/
+.vscode/
