@@ -24,6 +24,10 @@ class Storage:
                 active INTEGER NOT NULL DEFAULT 1,
                 state TEXT NOT NULL             -- Setup.to_json()
             );
+            CREATE TABLE IF NOT EXISTS state (
+                key TEXT PRIMARY KEY,           -- e.g. 'digest_date', 'alert:WTI'
+                value TEXT NOT NULL
+            );
             DROP TABLE IF EXISTS trades;        -- replaced by `setups`
         """)
         # Databases created before the language feature have no `lang` column
@@ -76,3 +80,14 @@ class Storage:
 
     def finished_setups(self) -> list:
         return [r["state"] for r in self.conn.execute("SELECT state FROM setups WHERE active = 0")]
+
+    # --- small key/value state: what the monitor has already announced ---
+    def get_state(self, key: str, default: str = "") -> str:
+        row = self.conn.execute("SELECT value FROM state WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else default
+
+    def set_state(self, key: str, value: str):
+        self.conn.execute(
+            "INSERT INTO state (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
+        self.conn.commit()

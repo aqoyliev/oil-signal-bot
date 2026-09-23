@@ -87,30 +87,113 @@ async def follow_setup(bot, db, row):
         await broadcast(bot, db, lambda lang: update_message(lang, setup, events))
 
 
-async def check_new_signal(bot, db, symbol: str, last_row):
-    df = compute_signals(await asyncio.to_thread(fetch_candles, symbol, "60d"))
-    if df.empty:
-        return
+async def check_new_signal(bot, db, symbol: str, last_row, df) -> bool:
     ts, row = df.index[-1], df.iloc[-1]
     end = ts + TIMEFRAME
     # Only a fresh candle (closed within the last 4h) that was not handled yet
     if row.signal == 0 or now(ts.tz) - end >= TIMEFRAME:
-        return
+        return False
     if last_row is not None:
         prev = Setup.from_json(last_row["state"])
         if end <= pd.Timestamp(prev.last_time or prev.signal_time):
-            return  # this candle closed while the previous setup was still running
+            return False  # this candle closed while the previous setup was still running
     setup = build_setup(symbol, int(row.signal), row.Close, row.atr, row.bb_mid, end, P)
     db.add_setup(symbol, setup.signal_time, setup.to_json())
     await broadcast(bot, db, lambda lang: signal_message(lang, setup, row.rsi))
+    return True
+
+
+# --- "price is getting close" heads-up -------------------------------------
+
+def pct_away(price: float, level: float) -> float:
+    return abs(level - price) / price * 100
+
+
+def alert_message(lang: str, symbol: str, row, side: int) -> str:
+    band = row.bb_low if side == 1 else row.bb_up
+    level = P.rsi_low if side == 1 else 100 - P.rsi_low
+    return "\n\n".join([
+        t(lang, "alert_head", name=INSTRUMENTS[symbol]["name"], side=side_text(lang, side)),
+        t(lang, "alert_buy" if side == 1 else "alert_sell", price=row.Close, rsi=row.rsi,
+          band=band, dist=pct_away(row.Close, band), lvl=level),
+    ])
+
+
+async def check_alert(bot, db, symbol: str, df):
+    """Warn once when price nears a signal; re-arm when it moves away again."""
+    key = f"alert:{symbol}"
+    side = int(df.iloc[-1].approach)
+    if side == 0:
+        db.set_state(key, "0")
+        return
+    if db.get_state(key, "0") == str(side):
+        return  # already warned about this approach
+    db.set_state(key, str(side))
+    await broadcast(bot, db, lambda lang: alert_message(lang, symbol, df.iloc[-1], side))
+
+
+# --- daily status digest ---------------------------------------------------
+
+DIGEST_HOURS = range(9, 12)  # Tashkent time; a restart still catches the morning
+
+
+def verdict(lang: str, row, setup) -> str:
+    if setup is not None:
+        return t(lang, "vd_active", side=side_text(lang, setup.side))
+    if row.approach == 1:
+        return t(lang, "vd_near_buy", level=row.bb_low,
+                 dist=pct_away(row.Close, row.bb_low), lvl=P.rsi_low)
+    if row.approach == -1:
+        return t(lang, "vd_near_sell", level=row.bb_up,
+                 dist=pct_away(row.Close, row.bb_up), lvl=100 - P.rsi_low)
+    return t(lang, "vd_neutral", low=row.bb_low, up=row.bb_up,
+             dlow=(row.bb_low - row.Close) / row.Close * 100,
+             dup=(row.bb_up - row.Close) / row.Close * 100,
+             rl=P.rsi_low, rh=100 - P.rsi_low)
+
+
+def digest_message(lang: str, date: str, rows: list) -> str:
+    parts = [t(lang, "digest_head", date=date)]
+    for symbol, row, setup in rows:
+        parts.append(t(lang, "digest_row", name=INSTRUMENTS[symbol]["name"], price=row.Close,
+                       rsi=row.rsi, low=row.bb_low, mid=row.bb_mid, up=row.bb_up,
+                       verdict=verdict(lang, row, setup)))
+    parts.append(t(lang, "digest_foot"))
+    return "\n\n".join(parts)
+
+
+async def maybe_digest(bot, db):
+    """One status message per trading morning, whether or not there is a signal."""
+    ts = now(TASHKENT)
+    if ts.weekday() >= 5 or ts.hour not in DIGEST_HOURS:
+        return
+    today = ts.strftime("%Y-%m-%d")
+    if db.get_state("digest_date") == today:
+        return
+    rows = []
+    for symbol in INSTRUMENTS:
+        df = compute_signals(await asyncio.to_thread(fetch_candles, symbol, "60d"))
+        if df.empty:
+            return  # no data right now; try again on the next cycle
+        last = db.last_setup(symbol)
+        setup = Setup.from_json(last["state"]) if last is not None and last["active"] else None
+        rows.append((symbol, df.iloc[-1], setup))
+    db.set_state("digest_date", today)
+    await broadcast(bot, db, lambda lang: digest_message(lang, ts.strftime("%d.%m.%Y"), rows))
 
 
 async def check_symbol(bot, db, symbol: str):
     last_row = db.last_setup(symbol)
     if last_row is not None and last_row["active"]:
         await follow_setup(bot, db, last_row)
+        return
+    df = compute_signals(await asyncio.to_thread(fetch_candles, symbol, "60d"))
+    if df.empty:
+        return
+    if await check_new_signal(bot, db, symbol, last_row, df):
+        db.set_state(f"alert:{symbol}", "0")  # the signal replaces the heads-up
     else:
-        await check_new_signal(bot, db, symbol, last_row)
+        await check_alert(bot, db, symbol, df)
 
 
 async def run_monitor(bot, db):
@@ -121,4 +204,8 @@ async def run_monitor(bot, db):
                 await check_symbol(bot, db, symbol)
             except Exception:
                 logging.exception(f"Monitor error for {symbol}")
+        try:
+            await maybe_digest(bot, db)
+        except Exception:
+            logging.exception("Daily digest failed")
         await asyncio.sleep(CHECK_EVERY)

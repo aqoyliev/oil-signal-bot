@@ -80,6 +80,35 @@ TEXTS = {
         "ev_timeout": "⏳ Zone {n}: {hold:.0f} soat o'tdi — qolgan qismni yoping ({price:.2f}). "
                       "Natija: <b>{pnl:+.2f} $</b>/barrel",
         "ev_cancelled": "❌ Zone {n} bekor qilindi — narx zonaga kelmadi",
+        "alert_head": "👀 <b>{name}</b> — {side} signaliga yaqin",
+        "alert_buy": (
+            "Narx: <b>{price:.2f}</b> | RSI: {rsi:.1f}\n"
+            "Pastki chiziq: {band:.2f} — {dist:.1f}% qoldi\n\n"
+            "4 soatlik sham shu chiziqdan pastda yopilsa va RSI {lvl:.0f} dan tushsa, "
+            "signal yuboraman.\n"
+            "⚠️ Hozir kirmang — tayyor turing."),
+        "alert_sell": (
+            "Narx: <b>{price:.2f}</b> | RSI: {rsi:.1f}\n"
+            "Yuqori chiziq: {band:.2f} — {dist:.1f}% qoldi\n\n"
+            "4 soatlik sham shu chiziqdan baland yopilsa va RSI {lvl:.0f} dan oshsa, "
+            "signal yuboraman.\n"
+            "⚠️ Hozir kirmang — tayyor turing."),
+        "digest_head": "☀️ <b>Kunlik holat</b> — {date}",
+        "digest_row": (
+            "<b>{name}</b>\n"
+            "Narx: <b>{price:.2f}</b> | RSI: {rsi:.1f}\n"
+            "Bollinger: {low:.2f} / {mid:.2f} / {up:.2f}\n"
+            "{verdict}"),
+        "digest_foot": "<i>Signal chiqsa darhol xabar beraman. /signal — hozirgi holat.</i>",
+        "vd_active": "📌 Faol signal: {side} — savdo davom etyapti, /signal ni bosing",
+        "vd_near_buy": "👀 BUY signaliga yaqin — {level:.2f} ga {dist:.1f}% qoldi, "
+                       "RSI {lvl:.0f} dan tushishi kerak. Tayyor turing.",
+        "vd_near_sell": "👀 SELL signaliga yaqin — {level:.2f} ga {dist:.1f}% qoldi, "
+                        "RSI {lvl:.0f} dan oshishi kerak. Tayyor turing.",
+        "vd_neutral": (
+            "⚪️ Signal yo'q — hozir kirmang, kutamiz.\n"
+            "BUY uchun: narx {low:.2f} dan past ({dlow:+.1f}%), RSI {rl:.0f} dan past\n"
+            "SELL uchun: narx {up:.2f} dan baland ({dup:+.1f}%), RSI {rh:.0f} dan baland"),
         "analyzing": "🔍 Grafik tahlil qilinyapti, biroz kuting...",
         "no_api_key": "⚠️ Tahlil funksiyasi hali sozlanmagan (ANTHROPIC_API_KEY yo'q).",
         "analysis_error": "❌ Tahlil qilib bo'lmadi. Birozdan keyin qayta urinib ko'ring.",
@@ -162,6 +191,35 @@ TEXTS = {
         "ev_timeout": "⏳ Zone {n}: {hold:.0f} hours passed — close the rest ({price:.2f}). "
                       "Result: <b>{pnl:+.2f} $</b>/barrel",
         "ev_cancelled": "❌ Zone {n} cancelled — price did not reach the zone",
+        "alert_head": "👀 <b>{name}</b> — close to a {side} signal",
+        "alert_buy": (
+            "Price: <b>{price:.2f}</b> | RSI: {rsi:.1f}\n"
+            "Lower band: {band:.2f} — {dist:.1f}% away\n\n"
+            "If a 4h candle closes below that band and RSI drops under {lvl:.0f}, "
+            "I'll send the signal.\n"
+            "⚠️ Don't enter yet — just get ready."),
+        "alert_sell": (
+            "Price: <b>{price:.2f}</b> | RSI: {rsi:.1f}\n"
+            "Upper band: {band:.2f} — {dist:.1f}% away\n\n"
+            "If a 4h candle closes above that band and RSI rises over {lvl:.0f}, "
+            "I'll send the signal.\n"
+            "⚠️ Don't enter yet — just get ready."),
+        "digest_head": "☀️ <b>Daily status</b> — {date}",
+        "digest_row": (
+            "<b>{name}</b>\n"
+            "Price: <b>{price:.2f}</b> | RSI: {rsi:.1f}\n"
+            "Bollinger: {low:.2f} / {mid:.2f} / {up:.2f}\n"
+            "{verdict}"),
+        "digest_foot": "<i>I'll message you the moment a signal appears. /signal — current state.</i>",
+        "vd_active": "📌 Active signal: {side} — the trade is still running, see /signal",
+        "vd_near_buy": "👀 Close to a BUY signal — {dist:.1f}% from {level:.2f}, "
+                       "RSI needs to drop under {lvl:.0f}. Get ready.",
+        "vd_near_sell": "👀 Close to a SELL signal — {dist:.1f}% from {level:.2f}, "
+                        "RSI needs to rise over {lvl:.0f}. Get ready.",
+        "vd_neutral": (
+            "⚪️ No signal — stay out for now.\n"
+            "For BUY: price below {low:.2f} ({dlow:+.1f}%), RSI under {rl:.0f}\n"
+            "For SELL: price above {up:.2f} ({dup:+.1f}%), RSI over {rh:.0f}"),
         "analyzing": "🔍 Analysing the chart, please wait...",
         "no_api_key": "⚠️ Chart analysis is not configured yet (ANTHROPIC_API_KEY missing).",
         "analysis_error": "❌ Analysis failed. Please try again in a moment.",

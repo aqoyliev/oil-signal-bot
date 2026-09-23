@@ -34,6 +34,11 @@ logic. Changing a rule in only one of them silently breaks parity — put it in
 **Every user-facing string goes in `utils/i18n.py`**, in both `uz` and `en`, and
 is rendered per subscriber language. Never hardcode text in a handler.
 
+**Anything the monitor sends on its own must be de-duplicated** through the
+`state` key/value table (`db.get_state` / `set_state`): `digest_date` for the
+daily status, `alert:<SYMBOL>` for the approach heads-up. The loop runs every
+5 minutes, so a broadcast without a guard would repeat 288 times a day.
+
 **Python 3.11.** aiogram 2.x needs aiohttp 3.8, which has no wheels for 3.12+.
 `runtime.txt` pins this on Railway; use 3.11 locally too.
 

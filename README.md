@@ -55,6 +55,23 @@ every zone fill, TP, stop, break-even exit, time-out and cancellation.
 `trading/setups.py` holds these rules; the backtest and the live bot both run
 the same `Setup.step()` code.
 
+### What the bot sends on its own
+
+Nobody has to ask for anything — the monitor pushes all of this to every
+subscriber:
+
+| | When |
+|---|---|
+| 🟢/🔴 Signal | a 4h candle meets the entry rule — zones, SL, TP1–TP4 |
+| 📍 Trade updates | every zone fill, TP, break-even, stop and time-out |
+| 👀 Heads-up | price is already outside the band and RSI is within 5 points of the trigger — "get ready, don't enter yet" |
+| ☀️ Daily status | every weekday morning (09:00–12:00 Tashkent): price, RSI, bands and either the running trade or the exact levels that would produce a signal |
+
+The heads-up fires once per approach and re-arms only after price moves back
+inside the band, so it cannot repeat itself. Over 2 years of data that is about
+**3 alerts per instrument per month, roughly a third of which became a real
+signal** within 20 hours — treat it as "watch the screen", not as an entry.
+
 ### Backtest (Sep 2024 – Sep 2026, per zone, 1 barrel, $0.04 cost per trade)
 
 | | Signals | Trades (zones) | Win rate | Reached TP1 | Profit factor | Total | Max drawdown |
