@@ -114,6 +114,7 @@ TEXTS = {
         "analysis_error": "❌ Tahlil qilib bo'lmadi. Birozdan keyin qayta urinib ko'ring.",
         "analysis_refused": "⚠️ Bu rasmni tahlil qila olmadim. Grafik skrinshotini yuboring.",
         "not_image": "Grafikni rasm (PNG/JPG) sifatida yuboring.",
+        "too_fast": "⏳ Biroz sekinroq — {secs:.0f} soniyadan keyin qayta yuboring.",
     },
     "en": {
         "choose_lang": "Tilni tanlang / Choose language:",
@@ -225,6 +226,7 @@ TEXTS = {
         "analysis_error": "❌ Analysis failed. Please try again in a moment.",
         "analysis_refused": "⚠️ I couldn't analyse this image. Please send a chart screenshot.",
         "not_image": "Please send the chart as an image (PNG/JPG).",
+        "too_fast": "⏳ Slow down — try again in {secs:.0f} seconds.",
     },
 }
 

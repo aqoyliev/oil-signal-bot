@@ -6,6 +6,9 @@ from aiogram.dispatcher.handler import CancelHandler, current_handler
 from aiogram.dispatcher.middlewares import BaseMiddleware
 from aiogram.utils.exceptions import Throttled
 
+from loader import db
+from utils.i18n import t
+
 
 class ThrottlingMiddleware(BaseMiddleware):
     """
@@ -34,4 +37,5 @@ class ThrottlingMiddleware(BaseMiddleware):
 
     async def message_throttled(self, message: types.Message, throttled: Throttled):
         if throttled.exceeded_count <= 2:
-            await message.reply("Too many requests!")
+            wait = max(throttled.rate - throttled.delta, 0)
+            await message.reply(t(db.get_lang(message.chat.id), "too_fast", secs=wait))

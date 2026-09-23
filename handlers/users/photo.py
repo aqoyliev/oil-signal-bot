@@ -7,9 +7,13 @@ from aiogram import types
 from loader import dp, db
 from trading import analyst
 from utils.i18n import t
+from utils.misc.throttling import rate_limit
 
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 TELEGRAM_LIMIT = 4096
+# Each analysis is a paid vision call, so one per user per 20s. Both handlers
+# share the key, otherwise sending the same chart as a file would bypass it.
+ANALYSIS_RATE = 20
 
 
 async def _analyze(message: types.Message, file, media_type: str):
@@ -33,11 +37,13 @@ async def _analyze(message: types.Message, file, media_type: str):
 
 
 @dp.message_handler(content_types=types.ContentType.PHOTO)
+@rate_limit(ANALYSIS_RATE, key="chart")
 async def analyze_photo(message: types.Message):
     await _analyze(message, message.photo[-1], "image/jpeg")  # Telegram re-encodes photos as JPEG
 
 
 @dp.message_handler(content_types=types.ContentType.DOCUMENT)
+@rate_limit(ANALYSIS_RATE, key="chart")
 async def analyze_document(message: types.Message):
     mime = message.document.mime_type or ""
     if mime not in IMAGE_TYPES:
