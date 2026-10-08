@@ -167,6 +167,10 @@ class DukascopyProvider(DataProvider):
             cursor = datetime(cursor.year + (cursor.month == 12), cursor.month % 12 + 1, 1,
                               tzinfo=timezone.utc)
         df = pd.concat(frames) if frames else pd.DataFrame(columns=COLUMNS)
+        # Consecutive monthly fetches overlap: Dukascopy returns the last bar of
+        # a month in both that month's range and the next one's. Left in, those
+        # duplicates are counted twice by every indicator and swing downstream.
+        df = df[~df.index.duplicated(keep="last")].sort_index()
         df = df[(df.index >= start) & (df.index < end)]
         if df.empty:
             raise MarketDataError(f"no {symbol} {timeframe} candles in {start} .. {end}")
@@ -180,6 +184,10 @@ def _as_utc(ts: datetime) -> datetime:
 
 def _check_sane(df: pd.DataFrame, symbol: str, timeframe: str):
     """Catch the malformed candles of spec item 34 before they reach a decision."""
+    if df.index.duplicated().any():
+        raise MarketDataError(f"{symbol} {timeframe}: duplicate candle timestamps")
+    if not df.index.is_monotonic_increasing:
+        raise MarketDataError(f"{symbol} {timeframe}: candles out of order")
     if (df[["open", "high", "low", "close"]] <= 0).any().any():
         raise MarketDataError(f"{symbol} {timeframe}: non-positive prices in the feed")
     if (df["high"] < df["low"]).any():

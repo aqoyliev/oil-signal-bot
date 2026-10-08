@@ -59,9 +59,14 @@ class Params:
     structure_swings: int = 4      # how many recent swings define the structure
 
     # --- support / resistance (spec item 4) ---
-    sr_lookback: int = 200         # bars searched for levels
-    sr_merge_atr: float = 0.5      # levels closer than this (in ATR) are one level
+    # A level is only a level if price respected it recently and more than once.
+    # Measured on 30m WTI: a 0.5-ATR merge over an unbounded history produced
+    # 167 levels six months in, which blocked practically every entry. The
+    # lookback and the level cap are what keep the list meaningful.
+    sr_lookback: int = 400         # bars searched for levels
+    sr_merge_atr: float = 1.5      # levels closer than this (in ATR) are one level
     sr_min_touches: int = 2
+    sr_max_levels: int = 12        # keep the most-touched, drop the rest
     sr_block_atr: float = 1.0      # "directly under resistance" distance
 
     # --- breakout + retest (spec item 5) ---
