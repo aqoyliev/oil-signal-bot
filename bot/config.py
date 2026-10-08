@@ -86,6 +86,9 @@ class Params:
     retest_window: int = 20            # bars allowed between break and retest
     retest_atr: float = 0.5            # how close the retest must come back
 
+    # --- entry zone (the band quoted in the message, spec item 22) ---
+    entry_zone_atr: float = 0.15   # half-width of the zone around the price
+
     # --- stop loss (spec item 16) ---
     sl_atr_buffer: float = 0.5     # ATR buffer beyond the swing, never on the level
     sl_min_atr: float = 0.8        # floor, so a tight swing cannot give a silly SL
