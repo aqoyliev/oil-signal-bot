@@ -69,6 +69,18 @@ class Params:
     sr_max_levels: int = 12        # keep the most-touched, drop the rest
     sr_block_atr: float = 1.0      # "directly under resistance" distance
 
+    # --- price action (spec item 6), all sizes relative to ATR ---
+    pa_body_atr: float = 0.5       # a "strong" candle's body
+    pa_dead_atr: float = 0.2       # below this the candle says nothing
+    pa_close_frac: float = 0.65    # close must sit this far up/down its range
+    pa_wick_ratio: float = 1.5     # rejection wick vs body
+    pa_range_window: int = 20      # baseline for momentum expansion
+    pa_expansion: float = 1.4      # range vs that baseline
+
+    # --- correlation and DXY (spec items 7, 8) ---
+    corr_conflict_penalty: float = 0.5   # score kept when WTI and Brent disagree
+    dxy_strong_atr: float = 1.0          # DXY move that counts as "strongly" against
+
     # --- breakout + retest (spec item 5) ---
     breakout_close_atr: float = 0.25   # close must clear the level by this much
     retest_window: int = 20            # bars allowed between break and retest
