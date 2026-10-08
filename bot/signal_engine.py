@@ -61,6 +61,7 @@ class Snapshot:
     context: corr.Context
     news: list[ne.Event] = field(default_factory=list)
     news_points: int = ne.NEUTRAL_SCORE
+    spread: float = 0.0               # measured ask-bid at this bar, 0 = use config
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,7 @@ class Signal:
     rr_cap: float                     # the realistic ceiling, before grading
     components: list[Component]
     notes: list[str]
+    basis: tuple                      # what makes this *this* setup (item 21)
 
     @property
     def entry_price(self) -> float:
@@ -340,6 +342,13 @@ def evaluate(snap: Snapshot, p: Params = DEFAULT_PARAMS) -> Signal | Rejection:
     risk = abs(entry - stop)
     if risk <= 0:
         return Rejection("stop collapsed onto the entry")
+    # A stop only a spread or two wide is not a stop: the cost of entering
+    # eats the reward before the trade has a chance (measured: a third of
+    # candidate signals were in that state).
+    spread = snap.spread or p.assumed_spread
+    if risk < p.min_risk_spread_mult * spread:
+        return Rejection(f"stop too tight for the spread "
+                         f"({risk:.2f} risk vs {spread:.2f} spread)")
     rr_cap, cap_note = realistic_cap(snap, entry, risk, p)
     if rr_cap < p.rr_min:
         return Rejection(f"no realistic 1:{p.rr_min:.0f} — only {rr_cap:.1f} to {cap_note}")
@@ -354,9 +363,17 @@ def evaluate(snap: Snapshot, p: Params = DEFAULT_PARAMS) -> Signal | Rejection:
     if not tps:
         return Rejection(f"no target fits inside {rr_cap:.1f} RR", score, components, grade)
 
+    # Item 21 needs to know when two signals describe the same opportunity.
+    # The broken level and the moment it broke are what identify it; with no
+    # breakout behind the trade, the structural stop stands in.
+    if snap.breakout is not None and snap.breakout.direction == d:
+        basis = ("breakout", round(snap.breakout.level.price, 2), snap.breakout.broke_at)
+    else:
+        basis = ("structure", round(stop, 2))
+
     return Signal(
         symbol=snap.symbol, direction=d, when=snap.when,
         entry_low=entry_low, entry_high=entry_high, sl=stop, tps=tps,
         score=score, grade=grade, rr_cap=rr_cap, components=components,
-        notes=[stop_note, cap_note],
+        notes=[stop_note, cap_note], basis=basis,
     )

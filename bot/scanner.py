@@ -109,60 +109,95 @@ def _int_or_unclear(value) -> int:
     return ms.UNCLEAR if value is None or pd.isna(value) else int(value)
 
 
-class _Row:
-    """Attribute access over a suffixed slice of the merged row."""
+class _Columns:
+    """The merged frame as plain numpy arrays.
 
-    def __init__(self, row, suffix: str = ""):
-        self._row, self._suffix = row, suffix
+    Reading scalars off a wide pandas Series is about a microsecond a field,
+    which over 11 000 bars times two directions times a dozen fields was most
+    of a 15-minute scan. The same scan over arrays is seconds.
+    """
+
+    __slots__ = ("data", "index")
+
+    def __init__(self, df: pd.DataFrame):
+        self.data = {name: df[name].to_numpy() for name in df.columns}
+        self.index = df.index
+
+    def array(self, name: str):
+        return self.data.get(name)
+
+
+class _Row:
+    """A positional view of one row, resolving `name` then `name<suffix>`."""
+
+    __slots__ = ("_cols", "_pos", "_suffix")
+
+    def __init__(self, cols: _Columns, pos: int, suffix: str = ""):
+        self._cols, self._pos, self._suffix = cols, pos, suffix
 
     def __getattr__(self, name: str):
-        key = f"{name}{self._suffix}"
-        if key in self._row:
-            return self._row[key]
-        if name in self._row:
-            return self._row[name]
-        raise AttributeError(f"{name!r} not in the aligned row (looked for {key!r})")
+        data = self._cols.data
+        column = data.get(name + self._suffix)
+        if column is None:
+            column = data.get(name)
+        if column is None:
+            raise AttributeError(
+                f"{name!r} not in the aligned row (looked for {name + self._suffix!r})")
+        return column[self._pos]
 
 
 def scan(frames: Frames, merged: pd.DataFrame, events: list[ne.Event],
          p: Params = DEFAULT_PARAMS):
     """Yield (close_time, direction, Signal | Rejection) for every 15m close.
 
+    Every row is evaluated, including the ones item 3 refuses outright, so the
+    tally of refusal reasons is complete — skipping them here would hide the
+    single most common reason the bot stays out.
+
     The level book advances on the setup timeframe as its bars close, so the
     levels a decision sees are exactly the ones that existed then.
     """
+    cols = _Columns(merged)
     book = LevelBook(frames.setup, frames.setup_swings, p)
-    setup_pos = -1
-    setup_index = frames.setup.index
     setup_atr = frames.setup["atr"].to_numpy()
 
-    for close_time, row in merged.iterrows():
-        setup_open = row.get("_open_time_setup")
-        if setup_open is None or pd.isna(setup_open):
-            continue
-        # Advance the book to the setup bar this decision is allowed to see.
-        target = int(setup_index.get_indexer([setup_open])[0])
-        while setup_pos < target:
-            setup_pos += 1
-            book.advance(setup_pos, float(setup_atr[setup_pos]))
+    # Which setup bar each decision may see, resolved once instead of per row.
+    # -1 marks a row with no closed setup bar behind it yet.
+    setup_for_row = frames.setup.index.get_indexer(cols.array("_open_time_setup"))
+    structures = cols.array("_structure")
+    trend_structures = cols.array("_structure_trend")
+    other_ema = cols.array("ema_fast_other")
+    other_structures = cols.array("_structure_other")
+    dxy_close = cols.array("close_dxy")
 
-        entry_row = _Row(row)
-        setup_row = _Row(row, "_setup")
-        trend_row = _Row(row, "_trend")
-        # The grades do not start on the same bar and one feed can be short of
-        # the other, so an absent column is UNCLEAR rather than an error.
-        structure = _int_or_unclear(row.get("_structure"))
-        trend_structure = _int_or_unclear(row.get("_structure_trend"))
-        if structure == ms.UNCLEAR:
-            continue   # item 3: no structure, no trade — and nothing to score
+    setup_pos = -1
+    breakout = None
+    for pos, close_time in enumerate(cols.index):
+        target = int(setup_for_row[pos])
+        if target < 0:
+            continue
+        if target > setup_pos:
+            while setup_pos < target:
+                setup_pos += 1
+                book.advance(setup_pos, float(setup_atr[setup_pos]))
+            # Levels only move when a setup bar closes, so the breakout is
+            # derived once per setup bar rather than per 15m decision.
+            breakout = book.breakout
+
+        entry_row = _Row(cols, pos)
+        setup_row = _Row(cols, pos, "_setup")
+        trend_row = _Row(cols, pos, "_trend")
+
+        # The grades do not start on the same bar and one feed can run short of
+        # the other, so an absent column reads as UNCLEAR rather than failing.
         other_bias = ms.UNCLEAR
-        other_structure = _int_or_unclear(row.get("_structure_other"))
-        if other_structure is not None and "ema_fast_other" in row \
-                and not pd.isna(row["ema_fast_other"]):
-            other_bias = corr.instrument_bias(_Row(row, "_other"), other_structure)
+        if other_ema is not None and not pd.isna(other_ema[pos]):
+            other_struct = None if other_structures is None else other_structures[pos]
+            other_bias = corr.instrument_bias(_Row(cols, pos, "_other"),
+                                              _int_or_unclear(other_struct))
         dxy_bias, dxy_strong = ms.UNCLEAR, False
-        if "close_dxy" in row and not pd.isna(row["close_dxy"]):
-            dxy_bias, dxy_strong = corr.dxy_bias_from(_Row(row, "_dxy"), p)
+        if dxy_close is not None and not pd.isna(dxy_close[pos]):
+            dxy_bias, dxy_strong = corr.dxy_bias_from(_Row(cols, pos, "_dxy"), p)
         context = corr.Context(other_bias, dxy_bias, dxy_strong)
         points = ne.news_score(events, close_time, p=p)
 
@@ -170,8 +205,8 @@ def scan(frames: Frames, merged: pd.DataFrame, events: list[ne.Event],
             snap = se.Snapshot(
                 symbol=frames.symbol, when=close_time, direction=direction,
                 setup_row=setup_row, trend_row=trend_row, entry_row=entry_row,
-                setup_structure=structure,
-                trend_structure=trend_structure,
-                levels=book.levels, breakout=book.breakout,
+                setup_structure=_int_or_unclear(structures[pos]),
+                trend_structure=_int_or_unclear(trend_structures[pos]),
+                levels=book.levels, breakout=breakout,
                 context=context, news=events, news_points=points)
             yield close_time, direction, se.evaluate(snap, p)

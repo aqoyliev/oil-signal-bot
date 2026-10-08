@@ -92,10 +92,19 @@ class Params:
     # --- stop loss (spec item 16) ---
     sl_atr_buffer: float = 0.5     # ATR buffer beyond the swing, never on the level
     sl_min_atr: float = 0.8        # floor, so a tight swing cannot give a silly SL
+    # Measured: with a $0.05 WTI spread, a third of signals had a stop so tight
+    # that the spread was over 10% of the risk, and the worst was 37%. At 1:2
+    # that is most of the edge, so a stop has to be worth several spreads.
+    min_risk_spread_mult: float = 10.0
+    assumed_spread: float = 0.05   # fallback when the feed has no ask side
 
     # --- risk/reward and targets (spec items 17, 18) ---
     rr_min: float = 2.0            # below this: no trade
-    rr_by_score: tuple = ((75, 2.0), (80, 3.0), (85, 4.0), (90, 5.0), (95, 6.0))
+    # Item 17 grades a single RR (2/3/4/5/6) while item 18 fixes the TP ladder
+    # at 2/3/5/6 — the two do not line up, and read literally the 1:4 band
+    # unlocks no new target, so 85-89 scores got the same two TPs as 80-84.
+    # The ladder wins, because item 18 names its four values explicitly.
+    rr_by_score: tuple = ((75, 2.0), (80, 3.0), (85, 5.0), (90, 6.0))
     tp_rr: tuple = (2.0, 3.0, 5.0, 6.0)
     tp_share: tuple = (0.25, 0.25, 0.25, 0.25)
     breakeven_after_tp: int = 1    # move SL to entry after TP1
