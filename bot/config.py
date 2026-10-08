@@ -143,6 +143,13 @@ class Params:
     adx_period: int = 14
     adx_trending: float = 20.0     # below this the market is ranging
 
+    # --- trade lifetime ---
+    # The spec sets no time stop. Without one a trade that neither reaches TP1
+    # nor its stop sits open indefinitely and the backtest cannot close its
+    # books, so this is an addition, not a spec rule: 192 bars of 15m is two
+    # days, after which the position is closed at the market.
+    max_hold_bars: int = 192
+
     # --- frequency and duplicates (spec items 20, 21) ---
     max_signals_per_day: int = 3
     cooldown_bars: int = 8         # on the setup timeframe
