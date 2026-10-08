@@ -131,3 +131,5 @@ dmypy.json
 .env
 # Bot database
 data/bot.db
+# Cached historical candles (regenerated on demand)
+data/candles/
