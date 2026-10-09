@@ -35,6 +35,13 @@ ENTRY_TF = "15m"   # entry refinement
 
 @dataclass(frozen=True)
 class Params:
+    # --- timeframes (spec items 1, 14) ---
+    # Module-level TREND_TF/SETUP_TF/ENTRY_TF are the spec's ladder; these let
+    # the whole ladder be shifted up or down and measured, which is the only
+    # way to answer whether 15m/30m was the problem.
+    trend_tf: str = TREND_TF
+    setup_tf: str = SETUP_TF
+    entry_tf: str = ENTRY_TF
     # --- indicators (spec item 2) ---
     ema_fast: int = 20
     ema_mid: int = 50
@@ -146,9 +153,9 @@ class Params:
     # --- trade lifetime ---
     # The spec sets no time stop. Without one a trade that neither reaches TP1
     # nor its stop sits open indefinitely and the backtest cannot close its
-    # books, so this is an addition, not a spec rule: 192 bars of 15m is two
-    # days, after which the position is closed at the market.
-    max_hold_bars: int = 192
+    # books, so this is an addition, not a spec rule. Expressed in hours rather
+    # than bars so it means the same thing on every timeframe.
+    max_hold_hours: float = 48.0
 
     # --- frequency and duplicates (spec items 20, 21) ---
     max_signals_per_day: int = 3

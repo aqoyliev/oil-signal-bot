@@ -35,6 +35,7 @@ from . import risk_manager as rm
 from . import scanner
 from . import signal_engine as se
 from .config import Params, DEFAULT_PARAMS
+from .data_provider import TIMEFRAMES
 from .scanner import Frames
 
 STOP, TARGET, TRAIL, TIMEOUT, OPEN = "stop", "target", "trail", "timeout", "open"
@@ -65,6 +66,12 @@ class Trade:
     @property
     def won(self) -> bool:
         return self.r > 0
+
+
+def hold_bars(p: Params) -> int:
+    """The time stop in bars of the entry timeframe."""
+    hours = TIMEFRAMES[p.entry_tf].total_seconds() / 3600.0
+    return max(1, int(round(p.max_hold_hours / hours)))
 
 
 def simulate(signal: se.Signal, bars: pd.DataFrame, spread: float,
@@ -143,7 +150,7 @@ def simulate(signal: se.Signal, bars: pd.DataFrame, spread: float,
             room = p.trail_atr * float(atrs[i])
             stop = max(stop, high - room) if d == 1 else min(stop, low + room)
 
-        if i + 1 >= p.max_hold_bars:
+        if i + 1 >= hold_bars(p):
             close = float(closes[i])
             banked += remaining * (close - entry) * d / risk
             trade.exit_time = bars.index[i]
@@ -164,8 +171,12 @@ def simulate(signal: se.Signal, bars: pd.DataFrame, spread: float,
 
 def run(frames: Frames, other: Frames | None, dxy: pd.DataFrame | None,
         events: list[ne.Event], spread: float,
-        p: Params = DEFAULT_PARAMS) -> list[Trade]:
-    """Scan, gate and simulate — the whole pipeline the live bot runs."""
+        p: Params = DEFAULT_PARAMS, since: pd.Timestamp | None = None) -> list[Trade]:
+    """Scan, gate and simulate — the whole pipeline the live bot runs.
+
+    `since` drops signals from the warmup history the frames carry before the
+    test window, so the measured period is the one that was asked for.
+    """
     merged = scanner.align(frames, other, dxy, p)
     gate = rm.SignalGate(p)
     entry_index = frames.entry.index
@@ -175,6 +186,8 @@ def run(frames: Frames, other: Frames | None, dxy: pd.DataFrame | None,
     for bar, (when, _direction, out) in enumerate(scanner.scan(frames, merged, events, p)):
         if not isinstance(out, se.Signal):
             continue
+        if since is not None and when < since:
+            continue
         if busy_until is not None and when <= busy_until:
             continue                      # one position per symbol
         if gate.admit(out, bar // 2) is not None:
@@ -182,7 +195,7 @@ def run(frames: Frames, other: Frames | None, dxy: pd.DataFrame | None,
         gate.record(out, bar // 2)
 
         start = int(entry_index.searchsorted(when, side="right"))
-        forward = frames.entry.iloc[start:start + p.max_hold_bars]
+        forward = frames.entry.iloc[start:start + hold_bars(p)]
         if forward.empty:
             continue
         trade = simulate(out, forward, spread, p)

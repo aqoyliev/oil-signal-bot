@@ -28,16 +28,19 @@ def annotate(df: pd.DataFrame, p: Params = DEFAULT_PARAMS) -> pd.DataFrame:
 
     out["body"] = (c - o).abs()
     out["range"] = h - l
-    out["upper_wick"] = h - c.combine(o, max)
-    out["lower_wick"] = c.combine(o, min) - l
+    # np.maximum rather than Series.combine(max): combine applies the builtin
+    # element by element, which raises on a NaN pair (the first bar after a
+    # shift) and is far slower. numpy propagates NaN, which is the right answer.
+    out["upper_wick"] = h - np.maximum(c, o)
+    out["lower_wick"] = np.minimum(c, o) - l
     # 1.0 = closed at the high, 0.0 = closed at the low
     out["close_pos"] = ((c - l) / rng).fillna(0.5)
     out["body_atr"] = out["body"] / out["atr"]
     out["range_atr"] = out["range"] / out["atr"]
 
     prev_o, prev_c = o.shift(), c.shift()
-    prev_top = prev_o.combine(prev_c, max)
-    prev_bottom = prev_o.combine(prev_c, min)
+    prev_top = np.maximum(prev_o, prev_c)
+    prev_bottom = np.minimum(prev_o, prev_c)
     bull, bear = c > o, c < o
     out["engulf_up"] = bull & (prev_c < prev_o) & (c >= prev_top) & (o <= prev_bottom)
     out["engulf_down"] = bear & (prev_c > prev_o) & (c <= prev_bottom) & (o >= prev_top)

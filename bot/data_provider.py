@@ -143,7 +143,11 @@ class DukascopyProvider(DataProvider):
     @staticmethod
     def _normalise(df: pd.DataFrame) -> pd.DataFrame:
         if df is None or df.empty:
-            return pd.DataFrame(columns=COLUMNS, index=pd.DatetimeIndex([], tz="UTC"))
+            # Must be float, not the default object dtype: an empty month
+            # concatenated with real ones upcasts every column to object, and
+            # the arithmetic downstream then fails on None instead of NaN.
+            return pd.DataFrame({c: pd.Series(dtype=float) for c in COLUMNS},
+                                index=pd.DatetimeIndex([], tz="UTC"))
         df = df.rename(columns=str.lower)
         missing = [c for c in COLUMNS if c not in df.columns]
         if missing:
@@ -172,6 +176,7 @@ class DukascopyProvider(DataProvider):
         # duplicates are counted twice by every indicator and swing downstream.
         df = df[~df.index.duplicated(keep="last")].sort_index()
         df = df[(df.index >= start) & (df.index < end)]
+        df = df.astype(float)   # belt and braces after the concat
         if df.empty:
             raise MarketDataError(f"no {symbol} {timeframe} candles in {start} .. {end}")
         _check_sane(df, symbol, timeframe)

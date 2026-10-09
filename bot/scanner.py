@@ -26,7 +26,7 @@ from . import market_structure as ms
 from . import news_engine as ne
 from . import price_action as pa
 from . import signal_engine as se
-from .config import ENTRY_TF, Params, DEFAULT_PARAMS, SETUP_TF, TREND_TF
+from .config import Params, DEFAULT_PARAMS
 from .data_provider import TIMEFRAMES, DataProvider
 from .support_resistance import LevelBook
 
@@ -43,15 +43,28 @@ class Frames:
     setup_swings: list
 
 
+WARMUP_BARS = 250   # EMA200 plus a little, per timeframe
+
+
 def prepare(provider: DataProvider, symbol: str, start, end,
             p: Params = DEFAULT_PARAMS) -> Frames:
+    """Load and prepare all three timeframes.
+
+    Each frame is fetched from `WARMUP_BARS` of *its own* bars before `start`,
+    because `ind.compute` drops the rows where EMA200 is not warmed up yet. On
+    a 30m frame that warmup is four days and hardly matters; on a daily frame
+    it is most of a year, and loading from `start` would silently hand the test
+    window to the warmup. Callers still see history before `start` in the
+    frames — restricting decisions to the window is the caller's job.
+    """
     def load(tf, with_pa):
-        df = ind.compute(provider.candles(symbol, tf, start, end), p)
+        begin = start - WARMUP_BARS * TIMEFRAMES[tf]
+        df = ind.compute(provider.candles(symbol, tf, begin, end), p)
         return pa.annotate(df, p) if with_pa else df
 
-    entry = load(ENTRY_TF, True)
-    setup = load(SETUP_TF, True)
-    trend = load(TREND_TF, False)
+    entry = load(p.entry_tf, True)
+    setup = load(p.setup_tf, True)
+    trend = load(p.trend_tf, False)
     return Frames(symbol, entry, setup, trend,
                   ms.structure_series(setup, p), ms.structure_series(trend, p),
                   ms.find_swings(setup, p))
@@ -69,9 +82,9 @@ def _by_close(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
 def align(frames: Frames, other: Frames | None, dxy: pd.DataFrame | None,
           p: Params = DEFAULT_PARAMS) -> pd.DataFrame:
     """One row per 15m close, carrying only already-closed higher-timeframe bars."""
-    entry = _by_close(frames.entry, ENTRY_TF)
-    setup = _by_close(frames.setup, SETUP_TF)
-    trend = _by_close(frames.trend, TREND_TF)
+    entry = _by_close(frames.entry, p.entry_tf)
+    setup = _by_close(frames.setup, p.setup_tf)
+    trend = _by_close(frames.trend, p.trend_tf)
 
     setup = setup.assign(_structure=frames.setup_structure.to_numpy())
     trend = trend.assign(_structure=frames.trend_structure.to_numpy())
@@ -87,7 +100,7 @@ def align(frames: Frames, other: Frames | None, dxy: pd.DataFrame | None,
         on="close_time", direction="backward", suffixes=("", "_trend"))
 
     if other is not None:
-        other_setup = _by_close(other.setup, SETUP_TF).assign(
+        other_setup = _by_close(other.setup, p.setup_tf).assign(
             _structure=other.setup_structure.to_numpy())
         merged = pd.merge_asof(
             merged.sort_values("close_time"),
@@ -95,7 +108,7 @@ def align(frames: Frames, other: Frames | None, dxy: pd.DataFrame | None,
                 ["close_time", "_structure", "ema_fast", "ema_mid", "ema_slow"]],
             on="close_time", direction="backward", suffixes=("", "_other"))
     if dxy is not None:
-        d = _by_close(dxy, SETUP_TF)
+        d = _by_close(dxy, p.setup_tf)
         merged = pd.merge_asof(
             merged.sort_values("close_time"),
             d.reset_index().sort_values("close_time")[
