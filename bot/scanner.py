@@ -89,15 +89,22 @@ def align(frames: Frames, other: Frames | None, dxy: pd.DataFrame | None,
     setup = setup.assign(_structure=frames.setup_structure.to_numpy())
     trend = trend.assign(_structure=frames.trend_structure.to_numpy())
 
+    # `direction="backward"` alone will reuse the last bar it has for as long
+    # as the feed stays empty — a month, in two measured cases. `tolerance`
+    # turns that into no data, which every caller already reads as WAIT.
+    carry = pd.Timedelta(hours=p.stale_carry_hours)
+
     merged = pd.merge_asof(
         entry.reset_index().sort_values("close_time"),
         setup.reset_index().sort_values("close_time"),
-        on="close_time", direction="backward", suffixes=("", "_setup"))
+        on="close_time", direction="backward", tolerance=carry,
+        suffixes=("", "_setup"))
     merged = pd.merge_asof(
         merged.sort_values("close_time"),
         trend.reset_index().sort_values("close_time")[
             ["close_time", "_structure", "ema_fast", "ema_mid", "ema_slow", "close"]],
-        on="close_time", direction="backward", suffixes=("", "_trend"))
+        on="close_time", direction="backward", tolerance=carry,
+        suffixes=("", "_trend"))
 
     if other is not None:
         other_setup = _by_close(other.setup, p.setup_tf).assign(
@@ -106,14 +113,16 @@ def align(frames: Frames, other: Frames | None, dxy: pd.DataFrame | None,
             merged.sort_values("close_time"),
             other_setup.reset_index().sort_values("close_time")[
                 ["close_time", "_structure", "ema_fast", "ema_mid", "ema_slow"]],
-            on="close_time", direction="backward", suffixes=("", "_other"))
+            on="close_time", direction="backward", tolerance=carry,
+            suffixes=("", "_other"))
     if dxy is not None:
         d = _by_close(dxy, p.setup_tf)
         merged = pd.merge_asof(
             merged.sort_values("close_time"),
             d.reset_index().sort_values("close_time")[
                 ["close_time", "close", "ema_fast", "ema_mid", "ema_slow", "atr"]],
-            on="close_time", direction="backward", suffixes=("", "_dxy"))
+            on="close_time", direction="backward", tolerance=carry,
+            suffixes=("", "_dxy"))
     return merged.set_index("close_time")
 
 

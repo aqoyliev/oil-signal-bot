@@ -37,6 +37,18 @@ TIMEFRAMES = {
 }
 
 
+# A higher timeframe can be rebuilt from a lower one, bar for bar: resampling
+# 1h into 4h was compared against Dukascopy's own 4h series over six months of
+# WTI and Brent and matched every boundary and every price exactly. That makes
+# it safe to fill a hole in the sparser feed with real data from the denser one.
+DERIVE_FROM = {"4h": "1h", "1d": "1h"}
+
+# The longest legitimate break in oil trading is the weekend, extended by a
+# holiday: 3 days 8 hours is the longest observed over four years. Anything
+# longer is a hole in the feed, not a closed market.
+MAX_MARKET_CLOSURE = timedelta(days=4)
+
+
 class MarketDataError(Exception):
     """Data is missing, stale or malformed — the caller must not trade."""
 
@@ -179,8 +191,48 @@ class DukascopyProvider(DataProvider):
         df = df.astype(float)   # belt and braces after the concat
         if df.empty:
             raise MarketDataError(f"no {symbol} {timeframe} candles in {start} .. {end}")
+        df = self._patch_holes(df, symbol, timeframe, side)
         _check_sane(df, symbol, timeframe)
         return df
+
+    def _patch_holes(self, df: pd.DataFrame, symbol: str, timeframe: str,
+                     side: str) -> pd.DataFrame:
+        """Rebuild whole months the sparser feeds are simply missing.
+
+        Dukascopy's 4h series has no data at all for WTI in July 2023 or Brent
+        in July 2024, while the 1h series over the same months is complete.
+        Left alone those holes are worse than missing data: the alignment in
+        `scanner` carries the last bar before the hole forward, so a decision
+        in the middle of July reads a trend from the end of June and nothing
+        in the output says so. Filled from the lower timeframe they are exact.
+        """
+        source = DERIVE_FROM.get(timeframe)
+        if source is None or len(df) < 2:
+            return df
+        span = df.index.to_series().diff()
+        holes = [(when - span[when], when)
+                 for when in span.index[span > MAX_MARKET_CLOSURE]]
+        patches = []
+        for previous, following in holes:
+            try:
+                lower = self.candles(symbol, source, previous, following, side)
+            except MarketDataError as err:
+                logging.warning(f"{symbol} {timeframe}: hole {previous} .. {following} "
+                                f"cannot be filled from {source}: {err}")
+                continue
+            built = resample(lower, timeframe)
+            built = built[(built.index > previous) & (built.index < following)]
+            if built.empty:
+                continue
+            logging.warning(f"{symbol} {timeframe}: {len(built)} bars rebuilt from "
+                            f"{source} to fill {previous} .. {following}")
+            patches.append(built)
+        if not patches:
+            return df
+        out = pd.concat([df] + patches)
+        # keep="first": where both exist the native bar wins, though the
+        # comparison above says they are the same bar either way.
+        return out[~out.index.duplicated(keep="first")].sort_index()
 
 
 def _as_utc(ts: datetime) -> datetime:

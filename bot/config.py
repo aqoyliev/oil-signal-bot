@@ -156,6 +156,11 @@ class Params:
     # books, so this is an addition, not a spec rule. Expressed in hours rather
     # than bars so it means the same thing on every timeframe.
     max_hold_hours: float = 48.0
+    # How long a closed higher-timeframe bar may still be used. It has to
+    # cover the weekend — the Friday 4h bar is genuinely the latest one when
+    # Monday opens — so the limit is only there to catch a feed that stopped:
+    # beyond it the structure reads UNCLEAR, which means WAIT (item 34).
+    stale_carry_hours: float = 96.0
 
     # --- frequency and duplicates (spec items 20, 21) ---
     max_signals_per_day: int = 3

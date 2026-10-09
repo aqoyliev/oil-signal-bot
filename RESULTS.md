@@ -9,8 +9,10 @@ round trip ($0.05, the measured median), the stop checked before the target
 inside a bar, one position per symbol, entry at the far edge of the zone,
 results in R (profit divided by money risked).
 
-**Development window: 1 Jan 2024 – 1 Jan 2026.** Held back and untouched:
-everything before 2024.
+**Development window: 1 Jan 2024 – 1 Jan 2026.** Everything the
+specification was written against was measured here. **Holdout: 1 Jan 2022 –
+1 Jan 2024**, downloaded and run once, after the configurations had been fixed;
+no parameter was changed after seeing it.
 
 ## The specification as written
 
@@ -95,34 +97,98 @@ The real obstacle: median maximum favourable excursion is **0.71R**, and only
 on entries that rarely travel 2R. Widening the stops to compensate was tested
 and made it worse.
 
-## Moving the timeframe ladder up
+## Moving the timeframe ladder up — and the out-of-sample test
 
 Same code, same rules, only the ladder changes. Per-timeframe volatility bounds
-are the middle 90% of that timeframe's own ATR% distribution; the time stop is
-96 setup bars in every case.
+are the middle 90% of that timeframe's own ATR% distribution **as measured on
+the development window**; the time stop is 96 setup bars in every case.
 
-| Ladder | Trades | Win | PF | Net R | Max DD | Median excursion | Reached 2R | Train / test PF |
-|---|---|---|---|---|---|---|---|---|
-| spec 1h/30m/15m | 169 | 34.3% | 0.70 | −33.9 | 46.8 | 0.71R | 21% | 0.50 / 1.28 |
-| **A — 4h/1h/30m** | 78 | 38.5% | **1.02** | +0.8 | **9.6** | **1.06R** | 28% | 0.98 / 1.10 |
-| B — 1d/4h/1h | 27 | 29.6% | 0.71 | −5.8 | 11.3 | 0.77R | 26% | 1.02 / 0.21 |
+2022–2023 was downloaded only after all three ladders had been written down,
+and nothing was changed after seeing it — the volatility bounds included, even
+though they were fitted elsewhere (see below).
 
-Ladder A is the first configuration that does not lose, and the change is
-qualitative rather than cosmetic:
+| Ladder | Window | Trades | Win | PF | Net R | Max DD | Median excursion | Reached 2R | Train / test |
+|---|---|---|---|---|---|---|---|---|---|
+| spec 1h/30m/15m | dev 24–25 | 169 | 34.3% | 0.70 | −33.9 | 46.8 | 0.71R | 21% | 0.50 / 1.28 |
+| spec 1h/30m/15m | **holdout 22–23** | 200 | 35.5% | **0.94** | −8.1 | 48.0 | 0.86R | 29% | 0.77 / 1.50 |
+| A — 4h/1h/30m | dev 24–25 | 81 | 38.3% | **1.00** | −0.2 | 9.6 | 1.01R | 27% | 0.90 / 1.23 |
+| A — 4h/1h/30m | **holdout 22–23** | 75 | 37.3% | 0.86 | −6.6 | 19.6 | 0.84R | 28% | 0.86 / 0.88 |
+| B — 1d/4h/1h | dev 24–25 | 27 | 33.3% | 0.88 | −2.3 | 10.2 | 0.77R | 30% | 1.32 / 0.21 |
+| B — 1d/4h/1h | **holdout 22–23** | 18 | 50.0% | **1.75** | +7.1 | 2.2 | 1.82R | 39% | 1.87 / 1.52 |
 
-* entries finally travel far enough for a 1:2 target — the central objection to
-  the spec ladder
-* drawdown 9.6R against 46.8R; six consecutive losses against fourteen
-* the split stops swinging: 0.98 / 1.10 against 0.50 / 1.28
-* **the grades point the right way for the first time**: VALID 0.79, STRONG
-  0.76, VERY_STRONG 2.08 (n=12), against 0.86 / 0.67 / 0.46 on the spec ladder
+**No ladder is above 1.0 in both windows, and the ranking reverses between
+them.** Ladder A was the best configuration on the development window and the
+middle one out of sample; the untouched specification was the worst on the
+development window and the best of the two usable ones out of sample; ladder B
+is the best out of sample on eighteen trades, one a month, having been the
+second worst on the window it was chosen on.
 
-What it is not: profitable. PF 1.02 and +0.8R over two years is break-even, and
-anything beyond the modelled spread makes it negative. 78 trades is a thin
-sample, the VERY_STRONG figure rests on 12 of them, and frequency is 0.11/day
-against item 1's target of 2–3.
+That is what parameter noise looks like. The earlier reading — that ladder A had
+fixed the entry timing — does not survive: its median favourable excursion,
+1.01R against the spec ladder's 0.71R on the development window, is 0.84R
+against 0.86R out of sample. The advantage was a property of 2024–2025.
 
-Ladder B is worse, and at 27 trades its 1.02-then-0.21 split is noise.
+Two further things the holdout settles:
+
+* **The 70/30 split tells us nothing.** The last 30% of trades beats the first
+  70% in six of the seven splits measured here, across both windows, both
+  instruments and every ladder. A split that flips the same way whatever is
+  being tested is measuring the method, not the strategy.
+* **The volatility filter was fitted on the wrong window.** The 0.32–0.82% ATR
+  band taken from 2024–2025 admits 90% of that window's 1h bars but only 71% of
+  2022–2023's, whose median ATR is 0.67% against 0.48%. Ladder A therefore met
+  the holdout with a filter that discarded nearly a third of it, concentrated in
+  the most volatile stretch. Recalibrating the band on 2022–2023 would have
+  fitted the holdout, so it was left alone and this is recorded instead.
+
+### The one thing that is positive in more than one place
+
+| Grade | spec dev | spec holdout | A dev | A holdout |
+|---|---|---|---|---|
+| VALID (75–79) | 0.86 (n=74) | 0.98 (n=90) | 0.76 (n=33) | 0.70 (n=31) |
+| STRONG (80–84) | 0.67 (n=58) | 0.88 (n=58) | 0.77 (n=32) | 0.66 (n=24) |
+| VERY_STRONG (85–89) | **0.46** (n=33) | **1.30** (n=36) | **2.08** (n=12) | **1.28** (n=16) |
+| A+ (90+) | — | 0.38 (n=16) | — | — |
+
+The 85–89 band is the only profitable bucket in three of the four cells, and it
+is the worst bucket in the fourth. Buckets run from 12 to 36 trades. Three of
+four is not a finding, and A+ — the grade the scoring system is proudest of —
+is 0.38 on the only sample large enough to show it. The score does not rank
+reliably in either direction.
+
+## A hole in the data, and what it was doing to the results
+
+Dukascopy's 4h series is missing whole months: WTI has no 4h candles at all for
+July 2023, Brent none for July 2024. The 30m, 1h and 1d series covering the
+same months are complete; only the 4h feed is affected.
+
+Missing candles would have been harmless. What made it a bug is that
+`scanner.align` joined timeframes with `merge_asof(direction="backward")` and no
+tolerance, so the last bar before the hole was carried forward for the whole
+month: 1.5–1.7% of decisions read a trend bar more than seven days old, the
+worst of them 31 days old, and nothing in the output said so.
+
+Brent's hole is inside the development window, so every figure published for a
+4h-trend ladder before this was found was computed partly on a frozen trend
+reading. Ladder A was **PF 1.02, +0.8R** on that data and is **1.00, −0.2R** on
+the corrected data; ladder B moves from 0.71 to 0.88. The small positive that
+made ladder A look like a discovery was an artifact.
+
+Two fixes, because they answer different questions:
+
+* `DukascopyProvider` rebuilds a hole from the next timeframe down. Resampling
+  1h into 4h was checked against the native 4h series over six months of both
+  instruments: same bar count, same boundaries, maximum price difference
+  0.0000. The hole is filled with real data, not an approximation.
+* `scanner.align` now passes `tolerance` (`Params.stale_carry_hours`, 96h) on
+  every timeframe join, so a bar is never carried further than a long weekend —
+  the longest genuine closure in four years is 3 days 8 hours. Past that the
+  structure reads UNCLEAR, which is already WAIT everywhere. This is the item 34
+  guarantee at the point of decision, and it protects live trading, where a feed
+  can stop without anyone resampling anything.
+
+The spread assumption did hold up: the median ask−bid on sampled months of
+2022 and 2023 is $0.050, the same figure measured on the development window.
 
 ## Notes on the specification itself
 
@@ -150,6 +216,38 @@ Ladder B is worse, and at 27 trades its 1.02-then-0.21 split is noise.
   1000-barrel contract with a $0.70 stop risks $7 whatever the account holds, so
   0.5% risk needs about $1400 of balance at that stop. Of the 73 signals in the
   original window, none was tradable on a $1000 account at 0.5%.
+
+## Where this leaves the strategy
+
+Six measurements, two instruments, four years, 570 trades, every rule of the
+specification implemented as written and every modelling choice made against
+the strategy rather than for it:
+
+| | dev 24–25 | holdout 22–23 |
+|---|---|---|
+| spec 1h/30m/15m | 0.70 | 0.94 |
+| A — 4h/1h/30m | 1.00 | 0.86 |
+| B — 1d/4h/1h | 0.88 | 1.75 (n=18) |
+
+Nothing here is profitable twice. The best number in the table rests on
+eighteen trades and comes from the ladder that was second worst where it was
+chosen. Item 39 asks what percentage of historical setups with this exact
+configuration actually won: 34–38%, at an average win that does not cover
+them, in every configuration tried.
+
+What has been ruled out, each by measurement rather than by argument: the
+reward ratio (items 29–17, every value from 1:2 to 1:6 loses), the component
+weights (six single-change hypotheses, none reaches 1.0), the stop width,
+the timeframe ladder (three of them, both directions out of sample) and the
+proposition that the 0–100 score ranks setups at all.
+
+What has not been tested, and is the only honest place left to look: the entry
+rule itself. Median favourable excursion is 0.71–1.06R depending on the window,
+and 21–39% of trades ever reach 2R. A strategy whose minimum target is 1:2
+needs entries that travel 2R, and none of these ladders produces them. That is
+a different strategy, not a different parameter — and per item 37 it would have
+to be specified, backtested and shown to work before any of it reaches a live
+account.
 
 ## Reproducing
 
