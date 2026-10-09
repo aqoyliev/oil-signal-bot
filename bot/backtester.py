@@ -57,6 +57,10 @@ class Trade:
     tps_hit: int = 0
     best_rr: float = 0.0           # how far it ran, whether or not it was banked
     bars: int = 0
+    # The item 12 table that produced this trade, kept so each component's
+    # predictive value can be measured on its own (item 31 asks for the weights
+    # to be optimised; first they have to be shown to carry any signal).
+    components: list = field(default_factory=list)
 
     @property
     def won(self) -> bool:
@@ -75,7 +79,8 @@ def simulate(signal: se.Signal, bars: pd.DataFrame, spread: float,
     risk = signal.risk
     trade = Trade(signal.symbol, d, signal.when, entry, signal.sl, risk,
                   signal.score, signal.grade,
-                  signal.tps[-1][0] if signal.tps else 0.0)
+                  signal.tps[-1][0] if signal.tps else 0.0,
+                  components=list(signal.components))
 
     stop = signal.sl
     remaining = 1.0
